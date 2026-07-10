@@ -107,12 +107,26 @@ button {
   padding: 0 18px;
 }
 
+.title-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
 .topbar h1 {
   margin: 0;
   text-align: center;
   font-size: 23px;
   line-height: 1;
   font-weight: 780;
+}
+
+.app-version {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .icon-button {

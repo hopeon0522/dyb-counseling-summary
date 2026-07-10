@@ -3,6 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
+const appVersion = 6;
 
 const defaultSettings = {
   mode: "mock",
@@ -27,6 +28,8 @@ let latest = {
   summary: "",
   requestSignature: ""
 };
+
+$("appVersionLabel").textContent = `v${appVersion}`;
 let isLoading = false;
 let editingExampleId = null;
 
@@ -265,11 +268,7 @@ function normalizeMemoStyle(summary) {
 
 function normalizeCounselingTone(line) {
   return line
-    .replace(/([가-힣]{2,4})\s*학생/g, (_, name) => {
-      const genericWords = new Set(["해당", "우리", "모든", "개별", "상담", "학원", "수업", "담임"]);
-      if (genericWords.has(name)) return `${name} 학생`;
-      return name.endsWith("이") ? name : `${name}이`;
-    })
+    .replace(/([가-힣]{2,4})\s*학생/g, (_, name) => name.endsWith("이") ? name : `${name}이`)
     .replace(/우려를\s*표명하였으며/g, "걱정하셨으며")
     .replace(/우려\s*표명하였으며/g, "걱정하셨으며")
     .replace(/우려를\s*표명하였음/g, "걱정하셨음")
@@ -391,7 +390,7 @@ function buildPrompt(transcript) {
     "본문의 각 문장 또는 의미 단위는 줄마다 '- '로 시작해라.",
     "문장 끝에는 마침표를 찍지 마라.",
     "'했다' 대신 '하였음', '하였다' 대신 '하였음', '입니다' 대신 '임', '했습니다' 대신 '하였음', '됩니다' 대신 '됨'처럼 상담일지 메모체로 작성해라.",
-    "학생 이름 뒤에 '학생'을 붙이지 마라. 예를 들어 이름이 미연이면 '미연학생'이라고 쓰지 말고 '미연이'처럼 자연스럽게 써라. 단, 이름을 모를 때만 '학생'이라고 표현해라.",
+    "학생 이름 뒤에 '학생'을 절대 붙이지 마라. 예를 들어 이름이 지원이면 '지원학생'이라고 쓰지 말고 반드시 '지원이'처럼 자연스럽게 표현해라. 미연이면 '미연학생'이 아니라 '미연이'처럼 표현해라. 이름을 아는 경우 '학생'으로 표현하는 예외는 만들지 마라.",
     "요약에는 어려운 행정 용어나 보고서식 단어를 쓰지 말고, 실제 대화에 나온 수준의 쉬운 일상 표현을 사용해라. 원문보다 과하게 전문적인 말로 바꾸지 마라.",
     "학부모 상담 내역에 맞게 너무 딱딱하지 않은 존중 표현을 사용해라. 예: 설명함이 아니라 설명드림, 논의함이 아니라 논의드림, 언급됨이 아니라 언급드림, 언급되었으며가 아니라 언급드렸으며, 안내함이 아니라 안내드림.",
     "행정문서나 보고서 같은 표현은 피하고 학부모님께 공유하는 자연스러운 상담 메모체로 작성해라. 예: 우려 표명하였으며가 아니라 걱정하셨으며, 질의하였으며가 아니라 질문주셨으며, 의견을 제시하였으며가 아니라 의견을 말씀주셨으며.",
