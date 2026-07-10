@@ -3,7 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
-const appVersion = 6;
+const appVersion = 7;
 
 const defaultSettings = {
   mode: "mock",
@@ -16,6 +16,7 @@ const defaultSettings = {
 };
 
 const fixedGeminiModel = "gemini-2.5-flash";
+const $ = (id) => document.getElementById(id);
 
 let settings = loadSettings();
 applyTheme(settings.theme);
@@ -33,7 +34,6 @@ $("appVersionLabel").textContent = `v${appVersion}`;
 let isLoading = false;
 let editingExampleId = null;
 
-const $ = (id) => document.getElementById(id);
 const views = {
   home: $("homeView"),
   settings: $("settingsView"),
