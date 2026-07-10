@@ -57,12 +57,14 @@
         <div class="result-block hidden" id="resultView">
           <div>
             <p class="eyebrow" id="resultSource">상담요약</p>
-            <div class="summary-text" id="summaryOutput"></div>
+            <textarea class="summary-text" id="summaryOutput" rows="10" aria-label="요약 결과"></textarea>
           </div>
 
           <button class="secondary-button" id="copySummaryButton" type="button">요약 결과 복사</button>
+          <button class="secondary-button" id="saveStyleButton" type="button">내 스타일로 저장</button>
           <button class="primary-button" id="emailSummaryButton" type="button">이메일 보내기</button>
           <button class="secondary-button" id="resummarizeButton" type="button">다시 요약</button>
+          <p class="hint compact-hint">수정한 요약문을 저장하면 다음 요약부터 문체와 분량 참고에 사용됩니다. 이름, 연락처 등 민감정보는 가능하면 지워 주세요.</p>
         </div>
       </section>
 

@@ -413,10 +413,15 @@ button:disabled {
 }
 
 .summary-text {
+  min-height: 260px;
   white-space: pre-wrap;
   line-height: 1.68;
   font-size: 17px;
   color: var(--text-soft);
+}
+
+.compact-hint {
+  margin-top: 4px;
 }
 
 .section-header {

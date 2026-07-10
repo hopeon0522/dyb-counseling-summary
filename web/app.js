@@ -461,7 +461,7 @@ async function summarizeCurrentInput({ force = false } = {}) {
       summary,
       requestSignature: signature
     };
-    $("summaryOutput").textContent = summary;
+    $("summaryOutput").value = summary;
     $("resultSource").textContent = `${latest.sourceName} · ${settings.mode === "mock" ? "Mock" : "Gemini"}`;
     updateProgress(100);
     hideStatus();
@@ -692,6 +692,38 @@ function saveExample() {
   showToast("예시를 저장했습니다.");
 }
 
+function currentSummaryText() {
+  return $("summaryOutput").value.trim();
+}
+
+function saveCurrentSummaryAsStyle() {
+  const body = currentSummaryText();
+  if (!body) {
+    showToast("저장할 요약문이 없습니다.");
+    return;
+  }
+
+  const duplicate = settings.referenceExamples.some((example) => example.body.trim() === body);
+  if (duplicate) {
+    showToast("이미 저장된 스타일 예시입니다.");
+    return;
+  }
+
+  const titleSource = body.match(/^\[([^\]]+)\]/)?.[1] || latest.sourceName || "수정 요약";
+  const nextExample = {
+    id: makeId(),
+    title: `내 스타일 · ${titleSource}`.slice(0, 40),
+    body,
+    updatedAt: new Date().toISOString()
+  };
+
+  settings.referenceExamples = [nextExample, ...settings.referenceExamples];
+  persistSettings();
+  renderExamples();
+  renderSettings();
+  showToast("내 스타일 예시로 저장했습니다.");
+}
+
 function formattedTimestamp(date = new Date()) {
   const two = (value) => String(value).padStart(2, "0");
   return `${two(date.getFullYear() % 100)}${two(date.getMonth() + 1)}${two(date.getDate())} - ${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`;
@@ -705,7 +737,7 @@ async function sendMail() {
   }
 
   const subject = `DYB상담내역 ${studentName} ${formattedTimestamp()}`;
-  const body = latest.summary;
+  const body = currentSummaryText() || latest.summary;
   const recipient = settings.recipientEmail.trim();
   if (!recipient) {
     await copyText(body);
@@ -763,8 +795,12 @@ function bindEvents() {
   $("summarizeButton").addEventListener("click", () => summarizeCurrentInput());
   $("resummarizeButton").addEventListener("click", () => summarizeCurrentInput({ force: true }));
   $("copySummaryButton").addEventListener("click", async () => {
-    await copyText(latest.summary);
+    await copyText(currentSummaryText() || latest.summary);
     showToast("요약 결과를 복사했습니다.");
+  });
+  $("saveStyleButton").addEventListener("click", saveCurrentSummaryAsStyle);
+  $("summaryOutput").addEventListener("input", () => {
+    latest.summary = $("summaryOutput").value;
   });
   $("emailSummaryButton").addEventListener("click", () => {
     $("studentNameInput").value = "";
