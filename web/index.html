@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="ko" data-theme="system">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#f7f8fb">
+    <title>상담요약</title>
+    <link rel="manifest" href="./manifest.json">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <span aria-hidden="true"></span>
+        <h1>상담요약</h1>
+        <button class="icon-button settings-icon" id="openSettingsButton" type="button" aria-label="설정">⚙︎</button>
+      </header>
+
+      <nav class="tabs two-tabs" aria-label="주요 화면">
+        <button class="tab active" id="summaryTabButton" type="button">요약</button>
+        <button class="tab" id="sampleTabButton" type="button">샘플</button>
+      </nav>
+
+      <section class="screen-list" id="homeView">
+        <div class="section-title">상담 원문</div>
+        <label class="file-button">
+          <input id="fileInput" type="file" accept=".txt,text/plain">
+          <span>에이닷 텍스트 파일 선택</span>
+        </label>
+
+        <label class="field">
+          <span>상담 내용 직접 붙여넣기</span>
+          <textarea id="transcriptInput" rows="12" placeholder="학원 선생님과 학부모 간 상담 내용을 여기에 붙여넣으세요."></textarea>
+        </label>
+
+        <div class="meta-row">
+          <span id="inputInfo">입력된 상담 내용 없음</span>
+        </div>
+
+        <button class="primary-button" id="summarizeButton" type="button">요약하기</button>
+
+        <div class="status-box hidden" id="statusBox">
+          <div class="progress-ring" aria-hidden="true">
+            <span id="progressPercent">0%</span>
+          </div>
+          <div class="status-copy">
+            <strong id="statusTitle">요약 준비 중</strong>
+            <p id="statusDetail">상담 내용을 확인하고 있습니다.</p>
+            <div class="progress-track">
+              <div id="progressBar" class="progress-bar"></div>
+            </div>
+          </div>
+        </div>
+
+        <p class="error hidden" id="errorMessage"></p>
+
+        <div class="result-block hidden" id="resultView">
+          <div>
+            <p class="eyebrow" id="resultSource">상담요약</p>
+            <div class="summary-text" id="summaryOutput"></div>
+          </div>
+
+          <button class="secondary-button" id="copySummaryButton" type="button">요약 결과 복사</button>
+          <button class="primary-button" id="emailSummaryButton" type="button">이메일 보내기</button>
+          <button class="secondary-button" id="resummarizeButton" type="button">다시 요약</button>
+        </div>
+      </section>
+
+      <section class="screen-list hidden" id="settingsView">
+        <div class="section-header">
+          <button class="back-button" data-show-home type="button">‹ 요약</button>
+          <h2>설정</h2>
+        </div>
+
+        <label class="field">
+          <span>화면 모드</span>
+          <select id="themeSelect">
+            <option value="system">시스템 설정</option>
+            <option value="light">라이트 모드</option>
+            <option value="dark">다크 모드</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>분석 모드</span>
+          <select id="modeSelect">
+            <option value="mock">Mock 모드</option>
+            <option value="gemini">Gemini 모드</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>기본 수신 이메일 주소</span>
+          <input id="recipientEmailInput" type="email" autocomplete="email" placeholder="name@example.com">
+        </label>
+
+        <label class="field">
+          <span>Gemini API 키</span>
+          <input id="geminiApiKeyInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza...">
+        </label>
+
+        <div class="field">
+          <span>Gemini 모델</span>
+          <strong id="geminiModelLabel">gemini-2.5-flash</strong>
+        </div>
+
+        <div class="field">
+          <span>참고 예시 평균 분량</span>
+          <strong id="averageLengthLabel">저장된 예시 없음</strong>
+        </div>
+
+        <label class="field">
+          <span>요약 분량 범위</span>
+          <select id="lengthToleranceSelect">
+            <option value="10">하한 -10% / 상한 +10%</option>
+            <option value="20">하한 -20% / 상한 +20%</option>
+            <option value="30">하한 -30% / 상한 +30%</option>
+            <option value="40">하한 -40% / 상한 +40%</option>
+            <option value="50">하한 -50% / 상한 +50%</option>
+          </select>
+        </label>
+        <p class="hint" id="summaryLengthGuide">참고 예시가 없으면 상담 내용에 맞는 자연스러운 분량으로 요약합니다.</p>
+
+        <label class="field">
+          <span>요약 스타일 메모</span>
+          <textarea id="styleMemoInput" rows="4" placeholder="예: 상담일지에 바로 붙여넣을 수 있게 차분하고 구체적으로"></textarea>
+        </label>
+
+        <button class="primary-button" id="saveSettingsButton" type="button">설정 저장</button>
+
+        <p class="hint">Gemini API 키는 이 기기의 localStorage에만 저장됩니다. 공용 기기에서는 저장하지 마세요.</p>
+      </section>
+
+      <section class="screen-list hidden" id="examplesView">
+        <div class="section-title">샘플 파일 관리</div>
+
+        <label class="file-button">
+          <input id="exampleFileInput" type="file" accept=".txt,text/plain">
+          <span>텍스트 파일로 예시 추가</span>
+        </label>
+        <button class="secondary-button" id="addExampleButton" type="button">직접 예시 추가</button>
+        <p class="hint">저장된 예시는 요약 페르소나로 사용됩니다. 요약 요청에는 최근 예시 몇 개만 포함해 무료 티어 사용량을 아낍니다. 민감정보는 가능한 한 익명화해 주세요.</p>
+        <div class="examples-list" id="examplesList"></div>
+      </section>
+    </main>
+
+    <dialog id="exampleDialog">
+      <form class="dialog-body" method="dialog">
+        <h2 id="exampleDialogTitle">예시 추가</h2>
+        <label class="field">
+          <span>제목</span>
+          <input id="exampleTitleInput" type="text" placeholder="예: 중등 영어 상담 요약">
+        </label>
+        <label class="field">
+          <span>상담요약 예시</span>
+          <textarea id="exampleBodyInput" rows="9"></textarea>
+        </label>
+        <div class="dialog-actions">
+          <button class="text-button" value="cancel" type="submit">취소</button>
+          <button class="primary-button" id="saveExampleButton" type="button">저장</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="studentDialog">
+      <form class="dialog-body" method="dialog">
+        <h2>학생 이름 입력</h2>
+        <label class="field">
+          <span>학생 이름</span>
+          <input id="studentNameInput" type="text" autocomplete="off">
+        </label>
+        <p class="hint">메일 제목은 DYB상담내역 이름 yymmdd - hhmmss 형식으로 생성됩니다.</p>
+        <div class="dialog-actions">
+          <button class="text-button" value="cancel" type="submit">취소</button>
+          <button class="primary-button" id="sendMailButton" type="button">메일 작성</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast hidden" id="toast"></div>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
