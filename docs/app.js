@@ -3,7 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
-const appVersion = 7;
+const appVersion = 8;
 
 const defaultSettings = {
   mode: "mock",
