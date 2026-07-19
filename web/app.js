@@ -3,7 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
-const appVersion = 9;
+const appVersion = 10;
 
 const defaultSettings = {
   mode: "mock",
@@ -735,24 +735,62 @@ function formattedTimestamp(date = new Date()) {
   return `${two(date.getFullYear() % 100)}${two(date.getMonth() + 1)}${two(date.getDate())} - ${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`;
 }
 
+const blockedStudentNameWords = new Set([
+  "학생", "선생", "선생님", "학부모", "어머님", "아버님", "부모님", "원장님", "담임", "학원",
+  "수업", "상담", "과제", "숙제", "영어", "수학", "국어", "오늘", "이번", "다음", "지난", "우리",
+  "해당", "아이", "친구", "내용", "부분", "정도", "문제", "단어", "문장", "시험", "학교", "상담요약",
+  "상담내역", "통화", "녹취", "요약", "기록", "이름", "성명"
+]);
+
 function normalizeStudentNameForMail(name) {
   const cleaned = (name || "")
-    .replace(/\s+/g, "")
     .replace(/학생/g, "")
     .replace(/님$/g, "")
     .replace(/[^\uAC00-\uD7A3]/g, "");
 
-  if (!cleaned) return "";
-  return cleaned.endsWith("이") ? cleaned : `${cleaned}이`;
+  if (cleaned.length < 2 || cleaned.length > 4 || blockedStudentNameWords.has(cleaned)) return "";
+  return cleaned;
+}
+
+function extractStudentNameFromFirstLine() {
+  const firstLine = (latest.transcript || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+
+  if (!firstLine) return "";
+
+  const bracketContents = [...firstLine.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1].trim());
+  for (const content of bracketContents) {
+    const labeledName = content.match(/(?:학생\s*)?(?:이름|성명)\s*[:：=\-]?\s*([가-힣]{2,4})/);
+    if (labeledName) {
+      const name = normalizeStudentNameForMail(labeledName[1]);
+      if (name) return name;
+    }
+
+    const studentSuffixName = content.match(/([가-힣]{2,4})\s*학생/);
+    if (studentSuffixName) {
+      const name = normalizeStudentNameForMail(studentSuffixName[1]);
+      if (name) return name;
+    }
+
+    const candidates = content
+      .replace(/학생이름|학생명|이름|성명|학생|상담요약|상담내역|상담|통화|녹취|요약|내역|기록|학부모|보호자|어머님|아버님/g, " ")
+      .split(/[^\uAC00-\uD7A3]+/)
+      .map(normalizeStudentNameForMail)
+      .filter(Boolean);
+
+    if (candidates.length) return candidates[0];
+  }
+
+  return "";
 }
 
 function inferStudentName() {
+  const headerName = extractStudentNameFromFirstLine();
+  if (headerName) return headerName;
+
   const source = `${latest.transcript || ""}\n${currentSummaryText() || latest.summary || ""}`;
-  const blocked = new Set([
-    "학생", "선생", "선생님", "학부모", "어머님", "아버님", "부모님", "원장님", "담임", "학원",
-    "수업", "상담", "과제", "숙제", "영어", "수학", "국어", "오늘", "이번", "다음", "지난", "우리",
-    "해당", "아이", "친구", "내용", "부분", "정도", "문제", "단어", "문장", "시험", "학교"
-  ]);
   const patterns = [
     /(?:학생|이름|자녀|아이)\s*(?:이름은|이름이|은|는|이|가)?\s*([가-힣]{2,4})(?:학생|이|가|은|는|입니다|이에요|예요|이고|인데|,|\s)/g,
     /([가-힣]{2,4})\s*학생/g,
@@ -763,10 +801,7 @@ function inferStudentName() {
     for (const match of source.matchAll(pattern)) {
       const rawName = (match[1] || "").replace(/학생/g, "").trim();
       const normalized = normalizeStudentNameForMail(rawName);
-      const baseName = normalized.replace(/이$/, "");
-      if (baseName.length >= 2 && !blocked.has(rawName) && !blocked.has(baseName) && !blocked.has(normalized)) {
-        return normalized;
-      }
+      if (normalized) return normalized;
     }
   }
 
@@ -774,24 +809,17 @@ function inferStudentName() {
 }
 
 async function sendMail() {
-  const studentName = $("studentNameInput").value.trim() || inferStudentName();
-  if (!studentName) {
-    showToast("학생 이름을 입력해 주세요.");
-    return;
-  }
-
+  const studentName = inferStudentName();
   const subject = `DYB상담내역 ${studentName} ${formattedTimestamp()}`;
   const body = currentSummaryText() || latest.summary;
   const recipient = settings.recipientEmail.trim();
   if (!recipient) {
     await copyText(body);
-    $("studentDialog").close();
     showToast("수신 이메일이 없어 요약 본문을 복사했습니다.");
     return;
   }
 
   window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  $("studentDialog").close();
 }
 
 function bindEvents() {
@@ -846,10 +874,7 @@ function bindEvents() {
   $("summaryOutput").addEventListener("input", () => {
     latest.summary = $("summaryOutput").value;
   });
-  $("emailSummaryButton").addEventListener("click", () => {
-    $("studentNameInput").value = inferStudentName();
-    $("studentDialog").showModal();
-  });
+  $("emailSummaryButton").addEventListener("click", sendMail);
 
   $("saveSettingsButton").addEventListener("click", saveSettingsFromForm);
   $("themeSelect").addEventListener("change", () => {
@@ -889,7 +914,6 @@ function bindEvents() {
     }
   });
   $("saveExampleButton").addEventListener("click", saveExample);
-  $("sendMailButton").addEventListener("click", sendMail);
 }
 
 if ("serviceWorker" in navigator) {
