@@ -3,7 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
-const appVersion = 8;
+const appVersion = 9;
 
 const defaultSettings = {
   mode: "mock",
@@ -735,8 +735,46 @@ function formattedTimestamp(date = new Date()) {
   return `${two(date.getFullYear() % 100)}${two(date.getMonth() + 1)}${two(date.getDate())} - ${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`;
 }
 
+function normalizeStudentNameForMail(name) {
+  const cleaned = (name || "")
+    .replace(/\s+/g, "")
+    .replace(/학생/g, "")
+    .replace(/님$/g, "")
+    .replace(/[^\uAC00-\uD7A3]/g, "");
+
+  if (!cleaned) return "";
+  return cleaned.endsWith("이") ? cleaned : `${cleaned}이`;
+}
+
+function inferStudentName() {
+  const source = `${latest.transcript || ""}\n${currentSummaryText() || latest.summary || ""}`;
+  const blocked = new Set([
+    "학생", "선생", "선생님", "학부모", "어머님", "아버님", "부모님", "원장님", "담임", "학원",
+    "수업", "상담", "과제", "숙제", "영어", "수학", "국어", "오늘", "이번", "다음", "지난", "우리",
+    "해당", "아이", "친구", "내용", "부분", "정도", "문제", "단어", "문장", "시험", "학교"
+  ]);
+  const patterns = [
+    /(?:학생|이름|자녀|아이)\s*(?:이름은|이름이|은|는|이|가)?\s*([가-힣]{2,4})(?:학생|이|가|은|는|입니다|이에요|예요|이고|인데|,|\s)/g,
+    /([가-힣]{2,4})\s*학생/g,
+    /([가-힣]{2,4})이(?:는|가|도|의|에게|한테|랑|와|와는|하고|부터|까지| 수업| 과제| 숙제| 학습)/g
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of source.matchAll(pattern)) {
+      const rawName = (match[1] || "").replace(/학생/g, "").trim();
+      const normalized = normalizeStudentNameForMail(rawName);
+      const baseName = normalized.replace(/이$/, "");
+      if (baseName.length >= 2 && !blocked.has(rawName) && !blocked.has(baseName) && !blocked.has(normalized)) {
+        return normalized;
+      }
+    }
+  }
+
+  return "이름모름";
+}
+
 async function sendMail() {
-  const studentName = $("studentNameInput").value.trim();
+  const studentName = $("studentNameInput").value.trim() || inferStudentName();
   if (!studentName) {
     showToast("학생 이름을 입력해 주세요.");
     return;
@@ -809,7 +847,7 @@ function bindEvents() {
     latest.summary = $("summaryOutput").value;
   });
   $("emailSummaryButton").addEventListener("click", () => {
-    $("studentNameInput").value = "";
+    $("studentNameInput").value = inferStudentName();
     $("studentDialog").showModal();
   });
 
