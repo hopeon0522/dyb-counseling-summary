@@ -3,7 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
-const appVersion = 11;
+const appVersion = 12;
 
 const defaultSettings = {
   mode: "mock",
@@ -249,12 +249,22 @@ function summaryLengthGuide() {
 }
 
 function normalizeMemoStyle(summary) {
-  const lines = summary
+  const preparedSummary = String(summary || "")
+    .replace(/\\r\\n|\\n|\\r/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\r\n?/g, "\n")
+    .trim();
+  const headerMatch = preparedSummary.match(/^(\[[^\]]+\])\s*([\s\S]*)$/);
+  const summaryWithSeparatedHeader = headerMatch?.[2]
+    ? `${headerMatch[1]}\n${headerMatch[2]}`
+    : preparedSummary;
+  const lines = summaryWithSeparatedHeader
+    .replace(/[ \t]+([-•])\s+(?=\S)/g, "\n$1 ")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
-  if (!lines.length) return summary.trim();
+  if (!lines.length) return preparedSummary;
 
   const firstLine = normalizeSummaryHeader(lines[0]);
 
@@ -532,8 +542,14 @@ async function geminiSummarize(transcript, onProgress = () => {}) {
           responseSchema: {
             type: "OBJECT",
             properties: {
-              studentName: { type: "STRING" },
-              summary: { type: "STRING" }
+              studentName: {
+                type: "STRING",
+                description: "상담 대상 학생의 실제 이름. 조사나 학생 호칭 없이 이름만 반환하고 불확실하면 이름모름"
+              },
+              summary: {
+                type: "STRING",
+                description: "첫 줄은 대괄호 제목, 이후 각 본문 항목은 줄바꿈과 하이픈으로 구분한 전체 상담요약문"
+              }
             },
             required: ["studentName", "summary"]
           }

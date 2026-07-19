@@ -1,4 +1,4 @@
-const cacheName = "dyb-counseling-gemini-pwa-v11";
+const cacheName = "dyb-counseling-gemini-pwa-v12";
 const assets = [
   "./",
   "./index.html",
