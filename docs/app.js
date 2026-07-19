@@ -3,7 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
-const appVersion = 10;
+const appVersion = 11;
 
 const defaultSettings = {
   mode: "mock",
@@ -27,6 +27,7 @@ let latest = {
   sourceName: "",
   transcript: "",
   summary: "",
+  studentName: "",
   requestSignature: ""
 };
 
@@ -386,6 +387,9 @@ function buildPrompt(transcript) {
     "너는 학원 상담 내용을 정리하는 전문 비서다. 아래 내용은 학원 선생님과 학부모 간 상담 대화이다. 사용자가 저장한 기존 상담요약 예시의 문체, 분량, 표현 방식을 참고해 실제 상담일지에 바로 붙여 넣을 수 있는 자연스러운 요약문을 작성해라. 불필요한 카테고리 분류는 하지 말고, 통화 내용에 근거해서만 간결하게 정리해라. 사용자가 지정한 분량에 맞춰 작성해라.",
     "",
     "[출력 형식]",
+    "응답은 studentName과 summary 두 필드를 가진 JSON 객체로만 반환해라.",
+    "studentName에는 상담 대상 학생의 실제 이름만 적어라. 상담 원문의 첫 번째 줄 대괄호 안 내용을 중요한 단서로 확인하고 전체 대화 문맥도 함께 판단해라. 이름 뒤에 조사, '이', '학생', '님'을 붙이지 마라. 이름을 확실히 알 수 없으면 반드시 '이름모름'으로 적어라.",
+    "summary 필드에는 아래 형식의 상담요약문 전체를 문자열로 작성해라.",
     "첫 줄은 반드시 [요약 20자 이내] 형식으로 작성해라. 학생 이름은 헤더에 넣지 마라. 문장형으로 쓰지 말고 핵심 주제만 명사형으로 짧게 작성해라. 예: [학습습관 점검], [과제수행 관리], [가정학습 방향]",
     "본문의 각 문장 또는 의미 단위는 줄마다 '- '로 시작해라.",
     "문장 끝에는 마침표를 찍지 마라.",
@@ -405,7 +409,7 @@ function buildPrompt(transcript) {
     "",
     `[상담 원문]\n${transcript}`,
     "",
-    "요약문만 출력해라. 분석 과정은 쓰지 마라. 위 출력 형식을 어기지 마라."
+    "JSON 이외의 설명이나 분석 과정은 쓰지 마라. 위 출력 형식을 어기지 마라."
   ].join("\n");
 }
 
@@ -452,19 +456,20 @@ async function summarizeCurrentInput({ force = false } = {}) {
 
   try {
     showStatus("요약 준비 중", "프롬프트와 참고 예시를 정리하고 있습니다.", 18);
-    const rawSummary = settings.mode === "mock"
+    const result = settings.mode === "mock"
       ? await mockSummarize(compacted.text)
       : await geminiSummarize(compacted.text, ({ title, detail, percent, auto = false }) => {
         showStatus(title, detail, percent);
         if (auto) startProgressTimer(percent, 86);
       });
     showStatus("요약 정리 중", "상담일지 말투와 형식을 다듬고 있습니다.", 92);
-    const summary = normalizeMemoStyle(rawSummary);
+    const summary = normalizeMemoStyle(result.summary);
 
     latest = {
       sourceName: latest.sourceName || "직접 입력 상담",
       transcript,
       summary,
+      studentName: result.studentName || "이름모름",
       requestSignature: signature
     };
     $("summaryOutput").value = summary;
@@ -488,7 +493,10 @@ async function mockSummarize(transcript) {
     ? `저장된 참고 예시 ${Math.min(settings.referenceExamples.length, maxExampleCount)}개를 페르소나로 참고한 Mock 결과입니다.`
     : "저장된 참고 예시가 없어 기본 상담일지 문체로 작성한 Mock 결과입니다.";
 
-  return `[학습습관 점검]\n- 학부모님은 학생이 가정에서 학습 시작까지 시간이 걸리고 과제와 복습을 꾸준히 이어가는 부분을 걱정하였음\n- 상담 내용상 학생은 수업 설명을 이해하는 흐름은 유지하고 있으나 문제 조건 확인과 문장 정리 과정에서 실수가 있는 편임\n- 선생님은 기본기가 크게 흔들린 상태라기보다 풀이 습관과 반복 점검이 필요한 단계라고 안내드림\n- 수업에서는 오답 이유를 학생이 직접 말로 설명하도록 돕고 짧은 단위의 단어 확인과 서술형 문장 연습을 병행하기로 논의드림\n- 가정에서는 정답을 바로 알려주기보다 아이가 먼저 근거를 말하도록 기다려 주고 정해진 시간에 시작하고 마무리하는 습관을 우선 확인해 달라고 안내드림\n- 다음 수업 전까지 단어 범위를 나누어 점검하고 오답 설명 과정을 함께 확인하기로 공유드림\n- ${note.replaceAll(".", "")} 희망 분량: ${summaryLengthGuide()}`;
+  return {
+    studentName: "이름모름",
+    summary: `[학습습관 점검]\n- 학부모님은 학생이 가정에서 학습 시작까지 시간이 걸리고 과제와 복습을 꾸준히 이어가는 부분을 걱정하였음\n- 상담 내용상 학생은 수업 설명을 이해하는 흐름은 유지하고 있으나 문제 조건 확인과 문장 정리 과정에서 실수가 있는 편임\n- 선생님은 기본기가 크게 흔들린 상태라기보다 풀이 습관과 반복 점검이 필요한 단계라고 안내드림\n- 수업에서는 오답 이유를 학생이 직접 말로 설명하도록 돕고 짧은 단위의 단어 확인과 서술형 문장 연습을 병행하기로 논의드림\n- 가정에서는 정답을 바로 알려주기보다 아이가 먼저 근거를 말하도록 기다려 주고 정해진 시간에 시작하고 마무리하는 습관을 우선 확인해 달라고 안내드림\n- 다음 수업 전까지 단어 범위를 나누어 점검하고 오답 설명 과정을 함께 확인하기로 공유드림\n- ${note.replaceAll(".", "")} 희망 분량: ${summaryLengthGuide()}`
+  };
 }
 
 async function geminiSummarize(transcript, onProgress = () => {}) {
@@ -519,7 +527,16 @@ async function geminiSummarize(transcript, onProgress = () => {}) {
           }
         ],
         generationConfig: {
-          temperature: 0.35
+          temperature: 0.35,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              studentName: { type: "STRING" },
+              summary: { type: "STRING" }
+            },
+            required: ["studentName", "summary"]
+          }
         }
       })
     });
@@ -534,12 +551,8 @@ async function geminiSummarize(transcript, onProgress = () => {}) {
     throw geminiError(response.status, data);
   }
 
-  onProgress({ title: "요약 추출 중", detail: "Gemini 응답에서 요약문을 추출하고 있습니다.", percent: 88 });
-  const text = extractGeminiText(data);
-  if (!text) {
-    throw new Error("Gemini가 요약 결과를 반환하지 않았습니다.");
-  }
-  return text;
+  onProgress({ title: "결과 추출 중", detail: "Gemini 응답에서 학생 이름과 요약문을 확인하고 있습니다.", percent: 88 });
+  return extractGeminiResult(data);
 }
 
 function extractGeminiText(data) {
@@ -557,6 +570,37 @@ function extractGeminiText(data) {
     }
   }
   return texts.join("\n").trim();
+}
+
+function extractGeminiResult(data) {
+  const text = extractGeminiText(data);
+  if (!text) {
+    throw new Error("Gemini가 학생 이름과 요약 결과를 반환하지 않았습니다.");
+  }
+
+  const jsonText = text
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/, "")
+    .replace(/\s*```$/, "")
+    .trim();
+
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error("Gemini 응답에서 학생 이름과 요약문을 구분하지 못했습니다. 다시 요약해 주세요.");
+  }
+
+  const studentName = String(parsed.studentName || "")
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+    .slice(0, 20) || "이름모름";
+  const summary = String(parsed.summary || "").trim();
+  if (!summary) {
+    throw new Error("Gemini가 요약문을 반환하지 않았습니다. 다시 요약해 주세요.");
+  }
+
+  return { studentName, summary };
 }
 
 function geminiError(status, data) {
@@ -735,81 +779,8 @@ function formattedTimestamp(date = new Date()) {
   return `${two(date.getFullYear() % 100)}${two(date.getMonth() + 1)}${two(date.getDate())} - ${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`;
 }
 
-const blockedStudentNameWords = new Set([
-  "학생", "선생", "선생님", "학부모", "어머님", "아버님", "부모님", "원장님", "담임", "학원",
-  "수업", "상담", "과제", "숙제", "영어", "수학", "국어", "오늘", "이번", "다음", "지난", "우리",
-  "해당", "아이", "친구", "내용", "부분", "정도", "문제", "단어", "문장", "시험", "학교", "상담요약",
-  "상담내역", "통화", "녹취", "요약", "기록", "이름", "성명"
-]);
-
-function normalizeStudentNameForMail(name) {
-  const cleaned = (name || "")
-    .replace(/학생/g, "")
-    .replace(/님$/g, "")
-    .replace(/[^\uAC00-\uD7A3]/g, "");
-
-  if (cleaned.length < 2 || cleaned.length > 4 || blockedStudentNameWords.has(cleaned)) return "";
-  return cleaned;
-}
-
-function extractStudentNameFromFirstLine() {
-  const firstLine = (latest.transcript || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean);
-
-  if (!firstLine) return "";
-
-  const bracketContents = [...firstLine.matchAll(/\[([^\]]+)\]/g)].map((match) => match[1].trim());
-  for (const content of bracketContents) {
-    const labeledName = content.match(/(?:학생\s*)?(?:이름|성명)\s*[:：=\-]?\s*([가-힣]{2,4})/);
-    if (labeledName) {
-      const name = normalizeStudentNameForMail(labeledName[1]);
-      if (name) return name;
-    }
-
-    const studentSuffixName = content.match(/([가-힣]{2,4})\s*학생/);
-    if (studentSuffixName) {
-      const name = normalizeStudentNameForMail(studentSuffixName[1]);
-      if (name) return name;
-    }
-
-    const candidates = content
-      .replace(/학생이름|학생명|이름|성명|학생|상담요약|상담내역|상담|통화|녹취|요약|내역|기록|학부모|보호자|어머님|아버님/g, " ")
-      .split(/[^\uAC00-\uD7A3]+/)
-      .map(normalizeStudentNameForMail)
-      .filter(Boolean);
-
-    if (candidates.length) return candidates[0];
-  }
-
-  return "";
-}
-
-function inferStudentName() {
-  const headerName = extractStudentNameFromFirstLine();
-  if (headerName) return headerName;
-
-  const source = `${latest.transcript || ""}\n${currentSummaryText() || latest.summary || ""}`;
-  const patterns = [
-    /(?:학생|이름|자녀|아이)\s*(?:이름은|이름이|은|는|이|가)?\s*([가-힣]{2,4})(?:학생|이|가|은|는|입니다|이에요|예요|이고|인데|,|\s)/g,
-    /([가-힣]{2,4})\s*학생/g,
-    /([가-힣]{2,4})이(?:는|가|도|의|에게|한테|랑|와|와는|하고|부터|까지| 수업| 과제| 숙제| 학습)/g
-  ];
-
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      const rawName = (match[1] || "").replace(/학생/g, "").trim();
-      const normalized = normalizeStudentNameForMail(rawName);
-      if (normalized) return normalized;
-    }
-  }
-
-  return "이름모름";
-}
-
 async function sendMail() {
-  const studentName = inferStudentName();
+  const studentName = latest.studentName || "이름모름";
   const subject = `DYB상담내역 ${studentName} ${formattedTimestamp()}`;
   const body = currentSummaryText() || latest.summary;
   const recipient = settings.recipientEmail.trim();
@@ -848,6 +819,7 @@ function bindEvents() {
       latest.sourceName = file.name;
       $("transcriptInput").value = await readTextFile(file);
       latest.summary = "";
+      latest.studentName = "";
       $("resultView").classList.add("hidden");
       updateInputInfo();
       hideStatus();
@@ -861,6 +833,7 @@ function bindEvents() {
   $("transcriptInput").addEventListener("input", () => {
     latest.sourceName = "직접 입력 상담";
     latest.summary = "";
+    latest.studentName = "";
     $("resultView").classList.add("hidden");
     updateInputInfo();
   });
