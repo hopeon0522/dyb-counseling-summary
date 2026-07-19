@@ -3,7 +3,7 @@ const geminiBaseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 const maxTranscriptChars = 24000;
 const maxExampleCount = 3;
 const maxExampleChars = 1200;
-const appVersion = 12;
+const appVersion = 13;
 
 const defaultSettings = {
   mode: "mock",
@@ -28,6 +28,7 @@ let latest = {
   transcript: "",
   summary: "",
   studentName: "",
+  callDateTime: "",
   requestSignature: ""
 };
 
@@ -397,8 +398,9 @@ function buildPrompt(transcript) {
     "너는 학원 상담 내용을 정리하는 전문 비서다. 아래 내용은 학원 선생님과 학부모 간 상담 대화이다. 사용자가 저장한 기존 상담요약 예시의 문체, 분량, 표현 방식을 참고해 실제 상담일지에 바로 붙여 넣을 수 있는 자연스러운 요약문을 작성해라. 불필요한 카테고리 분류는 하지 말고, 통화 내용에 근거해서만 간결하게 정리해라. 사용자가 지정한 분량에 맞춰 작성해라.",
     "",
     "[출력 형식]",
-    "응답은 studentName과 summary 두 필드를 가진 JSON 객체로만 반환해라.",
+    "응답은 studentName, callDateTime, summary 세 필드를 가진 JSON 객체로만 반환해라.",
     "studentName에는 상담 대상 학생의 실제 이름만 적어라. 상담 원문의 첫 번째 줄 대괄호 안 내용을 중요한 단서로 확인하고 전체 대화 문맥도 함께 판단해라. 이름 뒤에 조사, '이', '학생', '님'을 붙이지 마라. 이름을 확실히 알 수 없으면 반드시 '이름모름'으로 적어라.",
+    "callDateTime에는 상담 원문에 기록된 실제 전화 날짜와 시작 시간을 한국 시간 기준 YYYY-MM-DD HH:mm 형식으로 적어라. 지금 요약을 생성하는 시간이 아니라 원문에 명시된 통화 시간을 사용해라. 날짜 또는 시간을 확실히 알 수 없으면 추측하지 말고 반드시 '시간모름'으로 적어라.",
     "summary 필드에는 아래 형식의 상담요약문 전체를 문자열로 작성해라.",
     "첫 줄은 반드시 [요약 20자 이내] 형식으로 작성해라. 학생 이름은 헤더에 넣지 마라. 문장형으로 쓰지 말고 핵심 주제만 명사형으로 짧게 작성해라. 예: [학습습관 점검], [과제수행 관리], [가정학습 방향]",
     "본문의 각 문장 또는 의미 단위는 줄마다 '- '로 시작해라.",
@@ -480,6 +482,7 @@ async function summarizeCurrentInput({ force = false } = {}) {
       transcript,
       summary,
       studentName: result.studentName || "이름모름",
+      callDateTime: result.callDateTime || "시간모름",
       requestSignature: signature
     };
     $("summaryOutput").value = summary;
@@ -505,6 +508,7 @@ async function mockSummarize(transcript) {
 
   return {
     studentName: "이름모름",
+    callDateTime: "시간모름",
     summary: `[학습습관 점검]\n- 학부모님은 학생이 가정에서 학습 시작까지 시간이 걸리고 과제와 복습을 꾸준히 이어가는 부분을 걱정하였음\n- 상담 내용상 학생은 수업 설명을 이해하는 흐름은 유지하고 있으나 문제 조건 확인과 문장 정리 과정에서 실수가 있는 편임\n- 선생님은 기본기가 크게 흔들린 상태라기보다 풀이 습관과 반복 점검이 필요한 단계라고 안내드림\n- 수업에서는 오답 이유를 학생이 직접 말로 설명하도록 돕고 짧은 단위의 단어 확인과 서술형 문장 연습을 병행하기로 논의드림\n- 가정에서는 정답을 바로 알려주기보다 아이가 먼저 근거를 말하도록 기다려 주고 정해진 시간에 시작하고 마무리하는 습관을 우선 확인해 달라고 안내드림\n- 다음 수업 전까지 단어 범위를 나누어 점검하고 오답 설명 과정을 함께 확인하기로 공유드림\n- ${note.replaceAll(".", "")} 희망 분량: ${summaryLengthGuide()}`
   };
 }
@@ -546,12 +550,16 @@ async function geminiSummarize(transcript, onProgress = () => {}) {
                 type: "STRING",
                 description: "상담 대상 학생의 실제 이름. 조사나 학생 호칭 없이 이름만 반환하고 불확실하면 이름모름"
               },
+              callDateTime: {
+                type: "STRING",
+                description: "상담 원문에 기록된 실제 전화 시작 일시. 한국 시간 기준 YYYY-MM-DD HH:mm 형식이며 불확실하면 시간모름"
+              },
               summary: {
                 type: "STRING",
                 description: "첫 줄은 대괄호 제목, 이후 각 본문 항목은 줄바꿈과 하이픈으로 구분한 전체 상담요약문"
               }
             },
-            required: ["studentName", "summary"]
+            required: ["studentName", "callDateTime", "summary"]
           }
         }
       })
@@ -567,7 +575,7 @@ async function geminiSummarize(transcript, onProgress = () => {}) {
     throw geminiError(response.status, data);
   }
 
-  onProgress({ title: "결과 추출 중", detail: "Gemini 응답에서 학생 이름과 요약문을 확인하고 있습니다.", percent: 88 });
+  onProgress({ title: "결과 추출 중", detail: "Gemini 응답에서 학생 이름, 전화 시간과 요약문을 확인하고 있습니다.", percent: 88 });
   return extractGeminiResult(data);
 }
 
@@ -591,7 +599,7 @@ function extractGeminiText(data) {
 function extractGeminiResult(data) {
   const text = extractGeminiText(data);
   if (!text) {
-    throw new Error("Gemini가 학생 이름과 요약 결과를 반환하지 않았습니다.");
+    throw new Error("Gemini가 학생 이름, 전화 시간과 요약 결과를 반환하지 않았습니다.");
   }
 
   const jsonText = text
@@ -604,19 +612,23 @@ function extractGeminiResult(data) {
   try {
     parsed = JSON.parse(jsonText);
   } catch {
-    throw new Error("Gemini 응답에서 학생 이름과 요약문을 구분하지 못했습니다. 다시 요약해 주세요.");
+    throw new Error("Gemini 응답에서 학생 이름, 전화 시간과 요약문을 구분하지 못했습니다. 다시 요약해 주세요.");
   }
 
   const studentName = String(parsed.studentName || "")
     .replace(/[\r\n]+/g, " ")
     .trim()
     .slice(0, 20) || "이름모름";
+  const callDateTime = String(parsed.callDateTime || "")
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+    .slice(0, 40) || "시간모름";
   const summary = String(parsed.summary || "").trim();
   if (!summary) {
     throw new Error("Gemini가 요약문을 반환하지 않았습니다. 다시 요약해 주세요.");
   }
 
-  return { studentName, summary };
+  return { studentName, callDateTime, summary };
 }
 
 function geminiError(status, data) {
@@ -792,12 +804,28 @@ function saveCurrentSummaryAsStyle() {
 
 function formattedTimestamp(date = new Date()) {
   const two = (value) => String(value).padStart(2, "0");
-  return `${two(date.getFullYear() % 100)}${two(date.getMonth() + 1)}${two(date.getDate())} - ${two(date.getHours())}${two(date.getMinutes())}${two(date.getSeconds())}`;
+  return `${two(date.getFullYear() % 100)}${two(date.getMonth() + 1)}${two(date.getDate())} - ${two(date.getHours())}${two(date.getMinutes())}`;
+}
+
+function formattedCallTimestamp(callDateTime) {
+  const match = String(callDateTime || "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!match) return formattedTimestamp();
+
+  const [, year, month, day, hour, minute] = match;
+  const values = [month, day, hour, minute].map(Number);
+  const [monthNumber, dayNumber, hourNumber, minuteNumber] = values;
+  const isValid = monthNumber >= 1 && monthNumber <= 12
+    && dayNumber >= 1 && dayNumber <= 31
+    && hourNumber >= 0 && hourNumber <= 23
+    && minuteNumber >= 0 && minuteNumber <= 59;
+
+  if (!isValid) return formattedTimestamp();
+  return `${year.slice(-2)}${month}${day} - ${hour}${minute}`;
 }
 
 async function sendMail() {
   const studentName = latest.studentName || "이름모름";
-  const subject = `DYB상담내역 ${studentName} ${formattedTimestamp()}`;
+  const subject = `DYB상담내역 ${studentName} ${formattedCallTimestamp(latest.callDateTime)}`;
   const body = currentSummaryText() || latest.summary;
   const recipient = settings.recipientEmail.trim();
   if (!recipient) {
@@ -836,6 +864,7 @@ function bindEvents() {
       $("transcriptInput").value = await readTextFile(file);
       latest.summary = "";
       latest.studentName = "";
+      latest.callDateTime = "";
       $("resultView").classList.add("hidden");
       updateInputInfo();
       hideStatus();
@@ -850,6 +879,7 @@ function bindEvents() {
     latest.sourceName = "직접 입력 상담";
     latest.summary = "";
     latest.studentName = "";
+    latest.callDateTime = "";
     $("resultView").classList.add("hidden");
     updateInputInfo();
   });
